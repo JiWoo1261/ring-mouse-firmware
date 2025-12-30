@@ -1,0 +1,13 @@
+v0.10.10_t3scroll_la
+t3 scroll + liner acceleration
+
+v0.3  23.8.3
+firmware version 간단하게 변경
+gyroscope bandwidth 20Hz -> 41Hz로 변경
+
+v0.3.2 23.8.16
+tan(gyro_z or x) 로 변경
+//#define D_USE_MADGWICK feature_config.h
+
+v0.4 23.8.17
+calibration bias UICR에 저장

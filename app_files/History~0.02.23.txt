@@ -1,0 +1,132 @@
+V0.01.00_03_02_2023
+ - 불필요한 파일 삭제, hard coding된 숫자를 define으로 변경, left, right button 동작
+
+V0.01.02_03_14_2023
+ - scroll 동작 구현 완료
+
+V0.01.03_03_16_2023
+ - Push button 동작에 따라 COUT port 제어하는 내용 merge 함(D_COUT_TEST로 define되어 있음, Push button 2초 이상 누를 시 power off 동작함) 
+ - Push button 누르는 시간 변경 : 3초 -> 2초
+ - Scroll 방향 위/아래 반대로 움직이던 것 수정
+ - 불필요한 bsp 관련 파일 삭제
+
+V0.01.04_03_28_2023
+ - Board V0.4 준비 (D_BOARD_V0_4)
+ - POWER_OFF을 Output으로 초기화
+ - Power Off 제어 port를 COUT에서 POWER_OFF로 변경
+ - Charge_Complete를 Input, Pull-down으로 초기화
+ - Feature define들을 feature_config.h 파일을 생성해서 옮김
+ - modules/nrfx/templates/ 아래의 nRF51, nRF9160, nRF52810, nRF52811, nRF52820, nRF52833, nRF52840 삭제
+ - ADC 기능 작업 중 (D_USE_ADC)
+ - Watchdog 기능 적용 (D_USE_WDT)
+
+V0.01.05_04_05_2023
+ - Log에 FW version 정보 추가
+ - GPIOTE_CONFIG_LOG_ENABLED disable 시킴
+ - fs_sel 설정 GFS_2000DPS -> GFS_250DPS로 변경
+ - COUT port를 POWER_OFF port와 동일하게 동작하도록 변경
+ - Push button 동작을 Mouse_movement_handler에서 switch_timer_handler로 이동
+ - Main Clock(HFCLK)는 외부 XTAL사용 + RTC (LFCLK)는 내부 클락 사용 (HFCLK 분기해서 사용)
+ - Advertising / Pairing 시 동작 변경: 100ms on/off toggle -> 400ms on/off toggle
+ - Error on Power Off 동작 변경: Switch release 시점부터 POWER OFF 신호를 500ms High/Low/High/Low로 동작, LED는 Release시 Off 했다가 1.5s 시점부터 3회 깜박인 후 On 유지
+ - 30분동안 동작없으면 전원 OFF (신규 사양이며, 개발중 임시 반영 코드. 양산사양은 결정 필요)
+ - 연결 안 되었는데도 LED 꺼지던 문제 수정
+
+V0.01.06_04_06_2023
+ - 신규 LED 사양 적용 
+   . 사양서 1번 Idle 상태 blinking: 2초마다 ->  4초마다
+   . 사양서 2번 Advertising시 : 400ms On/Off -> 800ms On/Off
+   . 사양서 6번 Error on Power Off시 LED 반복 blinking 사이의 delay : 300ms -> 1200ms
+
+V0.01.07_04_10_2023
+ - ADC 기능 구현 완료 (AIN5에 할당, 추후 V0.4에서는 VBAT에 해당하는 AIN6로 변경 필요)
+ - Windows 화면의 Bluetooth 및 장치에서 Mouse Battery 잔량 표시되도록 기능 추가 (D_BATTERY_LEVEL_CONTROL)
+ - Battery Low시의 LED 동작 사양 적용 (2.6sec마다 100ms on/off 2번 수행)
+ - modules/nrfx/templates 폴더 삭제
+ - modules/nrfx/mdk 폴더 내에 불필요한 파일 삭제
+
+V0.01.08_04_17_2023
+ - Multi-Channel ADC 구현 완료 (VDD, VBAT, VBUS)
+ - MPU9250에 대해 Sleep mode, acc/gyro sensor disable 시킬 수 있는 함수 구현 (Drv_mpu.c/h)
+ - DCDC Enable 적용 (D_DCDC_ENABLE)
+ - 배터리 잔량 계산 변경 (풀충전 4.2V, 완전 방전 3.0V를 기준으로 잔량 계산)
+ - ADC 값 흔들림에 의해 배터리 잔량이 오르락 내리락 하는 현상 개선 (배터리 충전 중이 아닐 때는 잔량이 증가하지 않도록 보완)
+ - Mouse 움직임 개선 (interrupt 주기 변경: 50ms ->20ms, scable 변경)
+
+V0.01.09_04_24_2023
+ - Charge_Complete pin을 Pull Down에서 No Pull로 변경
+ - 충전 중일 때(Charge_Complete가 low이고 VBAT 전압이 4.1V 미만) LED Full On 하도록 구현, 단 완전 충전되면 원래 제어 사양대로 동작
+ - 배터리 잔량 계산 변경 (풀충전 4.1V, Low 3.2V, Very Low 2.8V)
+ - 배터리 잔량 Very Low(VBAT 2.8V 이하)에서 2분 경과 시 Power Off 사양 구현
+ - 30분동안 동작없으면 전원 OFF하는 동작 삭제 (사용하려면 D_MOUSE_MOVE_TIMEOUT_POWER_OFF를 살리면 됨)
+ - Mouse movement 관련하여 계산하는 부분을 모두 Mouse_movement_handler 함수 안으로 옮김
+ - madgwick 관련 code 추가 (D_USE_MADGWICK), lin_accel 값을 계산까지만 하고 사용하고 있지는 않음
+
+V0.01.10_04_30_2023
+ - Low Battery 기준 전압 변경 (3.2V -> 3.35V)
+ - LF 외부 XTAL 사용으로 변경
+ - Right Key 누르고 마우스 움직이면 커서 움직이지 않는 기능 구현
+
+V0.01.11_05_10_2023
+ - 회로도 V0.5 변경 내용 구현 (D_BOARD_V0_5, 아직 define은 안 되어 있음)
+ - Left Key 기능을 Mouse Movement를 위한 Key로 변경 (임시 적용)
+ - Mouse Movement Key를 누르는 여부에 따라  Gyro Sensor를 On/Off 하도록 구현 (Idle 상태에서 약 3mA 감소)
+ - Right Key를 Left Key 기능으로 변경 (임시 적용)
+ - Mouse 움직임량에 따라 Scale Factor를 구분 적용할 수 있도록 구현 (D_DIFF_SCALE_FACTOR)
+ - V0.01.10에 적용하였던 Right Key 누르고 마우스 움직이면 커서 움직이지 않는 기능 삭제
+ - 회로도 V0.3 관련 내용 삭제 (D_BOARD_V0_4 없앰)
+ - D_COUT_TEST 없애고 Code 정리
+ - Power On 초기 때 항상 bond data 지우도록 함 (임시 적용)
+
+V0.01.12_05_14_2023
+ - Power Off/On 후 연결되지 않는 문제 개선
+ - 장치 제거하고 다시 장치 추가 시 연결 안 되는 문제 개선
+
+V0.01.13_05_15_2023
+ - Mouse 움직임이 없는 상태에서 포인터가 흐르는 현상 개선
+
+V0.01.14_05_17_2023
+ - Power On 후 최초 Touch Key 인식이 비정상적으로 되는 문제 개선
+ - Power On 시 Mouse Movement Key가 눌려 있는 경우도 인식 가능하게 추가
+
+V0.01.15_05_24_2023
+ - Power On 후 최초에 Mouse Movement Key를 한번도 안 누른 상태에서 gyro sensor가 sleep이 아닌 상태로 있는 문제 수정
+ - Mouse Movement Key가 눌리지 않았을 때는 움직임 값도 계산하지 않도록 변경
+ - Accelometer, Gyroscope의 Full Scale을 define으로 설정하면 resolution이 연동되어 계산되도록 구현 (feature_config.h에서 설정)
+ - lin_accel 계산에서 일부 미구현 되어 있던 부분 추가
+
+V0.01.16_06_04_2023
+ - Accel FS를 2G에서 16G로 변경
+ - Advertising 시간 경과하여 sleep 진입 시에 LED OFF 추가
+ - Linear Accel 수식 오류 수정
+
+V0.01.17_06_04_2023
+ - Linear Accel 수식 수정 : (lin_accel[0] = accel[0] + a32)로 
+
+V0.02.17_06_07_2023
+ - Board V0.5 적용
+
+V0.02.18_06_10_2023
+ - V0.5 보드에서 마우스 움직임 상하좌우 반전되는 문제 수정
+ - V0.5 보드에서는 충전 중일 때 LED 사양을 ON에서 OFF로 변경 (회로에서 RED LED ON 하기 때문)
+
+V0.02.19_06_20_2023
+ - Advertising 상태에서 Sleep 들어가는 시간 변경 (3분 -> 1분) : APP_ADV_SLOW_DURATION값을 18000 -> 6000 으로 변경
+ - 마우스 연결 상태에서 움직임이 없을 때 2분 후 Sleep 들어가는 기능 추가
+    (D_NO_MOUSE_ACTION_SLEEP으로 정의되어 있음, 시간 변경은 C_NO_MOUSE_ACTION_TIMEOUT 값을 바꾸면 됨)
+ - Touch Key 3개를 Pull Up에서 No Pull로 변경
+
+V0.02.21_07_19_2023
+- 커서 흐르는 현상 개선
+- T3 Touch_Pad_Activate 터치패드 활성화
+
+V0.02.22_07_19_2023
+- 커서움직임 T3 터치패드와 상관없이 항상 활성화
+- Right 버튼 더블클릭시 커서가 왼쪽위로 이동
+
+V0.02.23_07_31_2023
+RingMouse Rev0.6 기능 구현. middle button click : 모드전환, 
+middle button 더블클릭시 좌측상단으로 커서 이동
+Right 버튼 더블클릭 삭제
+middle 버튼 더블클릭 추가, 모드전환 추가
+
