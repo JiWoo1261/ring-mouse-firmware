@@ -3,7 +3,7 @@
 
 #if defined(NDEBUG)  /* <-- definition in Relese Configuration */
 
-#define NRF_LOG_ENABLED       1
+#define NRF_LOG_ENABLED       0
 
 #endif
 
