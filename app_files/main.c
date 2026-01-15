@@ -64,12 +64,12 @@
 
 
 #ifdef NDEBUG
-#define C_FIRMWARE_VERSION              "V2.219c3"
+#define C_FIRMWARE_VERSION              "V2.22"
 #else
-#define	C_FIRMWARE_VERSION		"V2.219.Debug"
+#define	C_FIRMWARE_VERSION		"V2.22.Debug"
 #endif
 
-#define DEVICE_NAME			"RingMouse [V2.219c3]"			/**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME			"RingMouse [V2.22]"			/**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME		"Futuristec"                            /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define C_PUSH_PIN_NUM                  8
@@ -109,27 +109,27 @@
 /*lint -emacro(524, MIN_CONN_INTERVAL) // Loss of precision */
 
 /* Original Value regarding connection parameters*/
-//#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)            /**< Minimum connection interval (7.5 ms). */
-//#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)             /**< Maximum connection interval (15 ms). */
-//#define SLAVE_LATENCY                   20                                          /**< Slave latency. */
-//#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(3000, UNIT_10_MS)             /**< Connection supervisory timeout (3000 ms). */
-//#define APP_ADV_FAST_INTERVAL           0x0028                                      /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 25 ms.). */
-//#define APP_ADV_SLOW_INTERVAL           0x00A0                                      /**< Slow advertising interval (in units of 0.625 ms. This value corresponds to 100 ms.). */
-//#define APP_ADV_FAST_DURATION           300                                         /**< The advertising duration of fast advertising in units of 10 milliseconds. */
-//#define APP_ADV_SLOW_DURATION           6000                                        /**< The advertising duration of slow advertising in units of 10 milliseconds. */
-
-/* Modified Value to improve connection speed @ V2.219 (2025.12.07)  */
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)            /**< Minimum connection interval (7.5 ms). */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)             /**< Maximum connection interval (15 ms). */
-#define SLAVE_LATENCY                   0                                          /**< Slave latency. */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(2000, UNIT_10_MS)             /**< Connection supervisory timeout (3000 ms). */
-
-#define APP_ADV_FAST_INTERVAL           0x0020                                      /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 25 ms.). */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(15, UNIT_1_25_MS)             /**< Maximum connection interval (15 ms). */
+//#define SLAVE_LATENCY                   20                                          /**< Slave latency. */
+#define SLAVE_LATENCY                   10                                          /**< Slave latency. */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(3000, UNIT_10_MS)             /**< Connection supervisory timeout (3000 ms). */
+#define APP_ADV_FAST_INTERVAL           0x0028                                      /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 25 ms.). */
 #define APP_ADV_SLOW_INTERVAL           0x00A0                                      /**< Slow advertising interval (in units of 0.625 ms. This value corresponds to 100 ms.). */
 
-#define APP_ADV_FAST_DURATION           3000                                         /**< The advertising duration of fast advertising in units of 10 milliseconds. */
-#define APP_ADV_SLOW_DURATION           9000                                        /**< The advertising duration of slow advertising in units of 10 milliseconds. */
+/* Modified Value to improve connection speed @ V2.219 (2025.12.07)  */
+//#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)            /**< Minimum connection interval (7.5 ms). */
+//#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)             /**< Maximum connection interval (7.5 ms). */
+//#define SLAVE_LATENCY                   0                                          /**< Slave latency. */
+//#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(2000, UNIT_10_MS)             /**< Connection supervisory timeout (3000 ms). */
+//#define APP_ADV_FAST_INTERVAL           0x0020                                      /**< Fast advertising interval (in units of 0.625 ms. This value corresponds to 20 ms.). */
+//#define APP_ADV_SLOW_INTERVAL           0x00A0                                      /**< Slow advertising interval (in units of 0.625 ms. This value corresponds to 100 ms.). */
 /**********************************************************************/
+
+//#define APP_ADV_FAST_DURATION           300         // value until V2.219                                /**< The advertising duration of fast advertising in units of 10 milliseconds. */
+#define APP_ADV_FAST_DURATION           500           // from V2.22                              /**< The advertising duration of fast advertising in units of 10 milliseconds. */
+#define APP_ADV_SLOW_DURATION           6000                                        /**< The advertising duration of slow advertising in units of 10 milliseconds. */
+
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
