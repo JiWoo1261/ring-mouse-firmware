@@ -64,12 +64,12 @@
 
 
 #ifdef NDEBUG
-#define C_FIRMWARE_VERSION              "V2.22"
+#define C_FIRMWARE_VERSION              "V2.221"
 #else
-#define	C_FIRMWARE_VERSION		"V2.22.Debug"
+#define	C_FIRMWARE_VERSION		"V2.221.Debug"
 #endif
 
-#define DEVICE_NAME			"RingMouse [V2.22]"			/**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME			"RingMouse [V2.221]"			/**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME		"Futuristec"                            /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define C_PUSH_PIN_NUM                  8
@@ -188,6 +188,11 @@
 //#define NORMAL_SCALE_Y                  ((RAD_TO_DEG)*(40))
 /* End of scaling */
 
+#define GYRO_RATIO 0.7f
+#define ACCEL_RATIO 0.3f
+#define LINACC_SCALE_X 500.0f //가속도 -> 속도 변환 스케일링 값
+#define LINACC_SCALE_Y 500.0f
+
 #define TILT_ANGLE                      ((HORIZANTAL_TILT+VERTICAL_TILT)/(2.0))
 
 /* 앞으로 가기/뒤로가기 기능을 위한 변수들 */
@@ -204,7 +209,7 @@ static bool bScrollAction = false;     //위 ratio 계산결과 스크롤일경�
 static bool bBackforwardAction = false;  //위 ratio 계산결과 앞으로가기/뒤로가기일경우, 앞으로가기/뒤로가기 동작을 수행하기 위한 변수.
 static int32_t ratio;
 // 스크롤 동작일때는 스크롤버튼을 터치하고 있는동안 계속 스크롤 동작을 수행 함. 그러나 앞으로 가기/뒤로가기 동작일경우, 
-// 앞으로가기 또는 뒤로가기를 한번만 수행하고 나면 스크롤 버튼을 놓았다고 다시 터치할 때 까지는 deactivate 되어야 함.
+// 앞으로가기 또는 뒤로가기를 한번만 수행하고 나면 스크롤 버튼을 놓았다가 다시 터치할 때 까지는 deactivate 되어야 함.
 
 enum Skilled_mode_t {
     S_MODE_NONE = 0,
@@ -259,6 +264,10 @@ int scroll_count = 0;
 static float prev_laccx = 0, prev_laccz = 0;
 static float prev_velx = 0, prev_velz = 0;
 static float prev_dispx = 0, prev_dispz = 0;
+static float lin_acc_bias[3] = {0.f, 0.f, 0.f};
+static float lin_acc_sum[3] = {0.f, 0.f, 0.f};
+static int lin_acc_calibration_count = 0;
+#define LINACC_CALIB_SAMPLES 100
 #endif
 
 static uint8_t ub_cursor_mode_changed_count = 5;
@@ -2642,10 +2651,7 @@ static void Mouse_movement_handler(void *p_context)
         read_accel_gyro(raw_acc_gyro_data);
 
 #ifdef D_USE_COMPFLT
-        accel[0] = (float)raw_acc_gyro_data[0] - acc_bias[0];
-        accel[1] = (float)raw_acc_gyro_data[1] - acc_bias[1];
-        accel[2] = (float)raw_acc_gyro_data[2] - acc_bias[2];
-
+      
         gyro[0] = (float)raw_acc_gyro_data[3] - gyro_bias[0];
         gyro[1] = (float)raw_acc_gyro_data[4] - gyro_bias[1];
         gyro[2] = (float)raw_acc_gyro_data[5] - gyro_bias[2];
@@ -2800,16 +2806,40 @@ static void Mouse_movement_handler(void *p_context)
 #endif // D_USE_MADGWICK
 
 #ifdef D_USE_LINACC
-        if (fabs(lin_accel[0]) < 0.03f) {
-            tmp_laccx = 0;
-        } else {
-            tmp_laccx = lin_accel[0];
+        //캘리브레이션 부분(보정 샘플 수집)
+        if (lin_acc_calibration_count < LINACC_CALIB_SAMPLES) {
+            lin_acc_sum[0] += lin_accel[0]; // X축 가속도 합산
+            lin_acc_sum[1] += lin_accel[1]; 
+            lin_acc_sum[2] += lin_accel[2];
+            lin_acc_calibration_count++; // 샘플 수 증가
+
+            if (lin_acc_calibration_count == LINACC_CALIB_SAMPLES) { // 샘플 수가 목표치에 도달했을 때
+                lin_acc_bias[0] = lin_acc_sum[0] / (float)LINACC_CALIB_SAMPLES; // 평균 계산
+                lin_acc_bias[1] = lin_acc_sum[1] / (float)LINACC_CALIB_SAMPLES;
+                lin_acc_bias[2] = lin_acc_sum[2] / (float)LINACC_CALIB_SAMPLES;
+                NRF_LOG_INFO("[LIN_ACC_CALIB] Bias: X=%d, Y=%d, Z=%d (x1000)", //바이어스 출력
+                    (int)(lin_acc_bias[0] * 1000), // 1000 곱해서 정수로 변환
+                    (int)(lin_acc_bias[1] * 1000), 
+                    (int)(lin_acc_bias[2] * 1000));
+            }
+            return;
         }
 
-        if (fabs(lin_accel[2]) < 0.03f) {
-            tmp_laccz = 0;
-        } else {
-            tmp_laccz = lin_accel[2];
+        {
+            float corrected_laccx = lin_accel[0] - lin_acc_bias[0];
+            float corrected_laccz = lin_accel[2] - lin_acc_bias[2];
+
+            if (fabs(corrected_laccx) < 0.03f) {
+                tmp_laccx = 0;
+            } else {
+                tmp_laccx = corrected_laccx;
+            }
+
+            if (fabs(corrected_laccz) < 0.03f) {
+                tmp_laccz = 0;
+            } else {
+                tmp_laccz = corrected_laccz;
+            }
         }
 
         deltaT = 0.015f;
@@ -2818,19 +2848,23 @@ static void Mouse_movement_handler(void *p_context)
         if (b_mouse_movement_flag || b_scroll_flag || b_mouse_movement_flag_2) 
         {
 #ifdef D_USE_LINACC
+        //가속도 -> 속도 적분
             velx = prev_velx + 0.5f*(tmp_laccx + prev_laccx)*deltaT;
             velz = prev_velz + 0.5f*(tmp_laccz + prev_laccz)*deltaT;
 
-            prev_laccx = tmp_laccx;
+            prev_laccx = tmp_laccx;  // 이전 가속도 저장
             prev_laccz = tmp_laccz;
 
-            prev_velx = velx;
+            prev_velx = velx; // 이전 속도 저장
             prev_velz = velz;
 
-            deltax += -velx*500;
-            deltay += velz*500;
-            //deltax = -velx*5000;
-            //deltay = velz*5000;
+            {
+                float accel_deltax = -velx * LINACC_SCALE_X;   // 음수 부호는 x축 방향 보정
+                float accel_deltay = velz * LINACC_SCALE_Y;    // 양수 부호는 z축 방향 보정
+
+                deltax = (int16_t)((float)deltax * GYRO_RATIO + accel_deltax * ACCEL_RATIO); // 자이로 + 가속도
+                deltay = (int16_t)((float)deltay * GYRO_RATIO + accel_deltay * ACCEL_RATIO);
+            }
 
             int la_e7 = (int)(tmp_laccz*10000000);
             int v_e7 = (int)(velz*10000000);
