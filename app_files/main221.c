@@ -1,4 +1,4 @@
-﻿
+
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -64,12 +64,12 @@
 
 
 #ifdef NDEBUG
-#define C_FIRMWARE_VERSION              "V2.22c"
+#define C_FIRMWARE_VERSION              "V2.221"
 #else
-#define	C_FIRMWARE_VERSION		"V2.22.Debug"
+#define	C_FIRMWARE_VERSION		"V2.221.Debug"
 #endif
 
-#define DEVICE_NAME			"RingMouse [V2.221c]"			/**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME			"RingMouse [V2.221]"			/**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME		"Futuristec"                            /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define C_PUSH_PIN_NUM                  8
@@ -85,7 +85,6 @@
 #define	MOUSE_MOVE_TIME			8
 #else
 #define	MOUSE_MOVE_TIME			15 //20
-
 #endif
 
 /* Only used in Mouse_movement_handler *
@@ -97,7 +96,6 @@
 #define SWITCH_INTERVAL                 SWITCH_TIME
 #define MOUSE_MOVE_INTERVAL             MOUSE_MOVE_TIME
 #define CURSOR_MODE_TIMEOUT             3000
-
 
 #define MIN_BATTERY_LEVEL               81                                          /**< Minimum simulated battery level. */
 #define MAX_BATTERY_LEVEL               100                                         /**< Maximum simulated battery level. */
@@ -131,6 +129,7 @@
 //#define APP_ADV_FAST_DURATION           300         // value until V2.219                                /**< The advertising duration of fast advertising in units of 10 milliseconds. */
 #define APP_ADV_FAST_DURATION           500           // from V2.22                              /**< The advertising duration of fast advertising in units of 10 milliseconds. */
 #define APP_ADV_SLOW_DURATION           6000                                        /**< The advertising duration of slow advertising in units of 10 milliseconds. */
+
 
 #define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
@@ -191,24 +190,26 @@
 
 #define GYRO_RATIO 0.7f
 #define ACCEL_RATIO 0.3f
-#define LINACC_SCALE_X 120.0f // 속도 -> 커서 이동 스케일
-#define LINACC_SCALE_Y 120.0f
+#define LINACC_SCALE_X 500.0f //가속도 -> 속도 변환 스케일링 값
+#define LINACC_SCALE_Y 500.0f
 
 #define TILT_ANGLE                      ((HORIZANTAL_TILT+VERTICAL_TILT)/(2.0))
 
-// 스크롤/뒤로가기 판정 기준
-#define Criteria_Distance   10     // 스크롤/뒤로가기 판정 시작 최소 이동거리
-#define Criteria_ScrollCheck_Positive  80   // ratio 기준(+) : (accum_dy * 100 / accum_dx)
-#define Criteria_ScrollCheck_Negative  -80  // ratio 기준(-) : (accum_dy * 100 / accum_dx)
-#define NumberofAbandonInputs   5           // 초기 IMU 입력 무시 횟수
-static int32_t accum_dx = 0;                // 누적 deltax (스크롤/뒤로가기 판정용)
-static int32_t accum_dy = 0;                // 누적 deltay (스크롤/뒤로가기 판정용)
-static int32_t IMU_input_counts = 0;        // 초기 IMU 입력 무시 카운트
-static bool bRatio_calculate_once = true;   // ratio는 한 번만 계산
-static bool bScrollActivated = false;       // 최소 이동거리 만족 후 판정 활성화
-static bool bScrollAction = false;          // ratio 결과가 스크롤이면 true
-static bool bBackforwardAction = false;
+/* 앞으로 가기/뒤로가기 기능을 위한 변수들 */
+#define Criteria_Distance   10     //스크롤과 앞/뒤 동작을 판단하기 위한 최소 이동거리 
+#define Criteria_ScrollCheck_Positive  80  // 스크롤과 앞으로가기/뒤로가기를 구분하기 위한 + 기울기 값 (accum_y * 100 / accum_x 값)
+#define Criteria_ScrollCheck_Negative  -80  // 스크롤과 앞으로가기/뒤로가기를 구분하기 위한 - 기울기 값 (accum_y * 100 / accum_x 값)
+#define NumberofAbandonInputs   5  //초기 입력 중 진동으로 인하여 무시 할 입력 갯수.
+static int32_t accum_dx = 0;          // 자이로의 deltax를 누적한 값. 기울기 값 및 이동거리 계산에 사용.
+static int32_t accum_dy = 0;          // 자이로의 deltay를 누적한 값. 기울기 값 및 이동거리 계산에 사용.
+static int32_t IMU_input_counts = 0;      // 스크롤 버튼 터치 후 초기 5개? 값을 버릴 때 사용하기 위한 변수. 버튼 터치 시 진동에 의한 입력을 무시 하기 위한 동작임. 
+static bool bRatio_calculate_once = true;  // ratio 계산으로 조건 만족하면 한번만 하면 됨. 한번만 계산할 때 사용하기 위한 변수.
+static bool bScrollActivated = false;      //스크롤 버튼 터치 후 일정거리 이상 움직이면 ratio 에 따라 스크롤일지 앞/뒤일지 한번만 결정 함. 이 때 사용하기 위한 변수
+static bool bScrollAction = false;     //위 ratio 계산결과 스크롤일경우, 스크롤 동작을 수행하기 위한 변수.
+static bool bBackforwardAction = false;  //위 ratio 계산결과 앞으로가기/뒤로가기일경우, 앞으로가기/뒤로가기 동작을 수행하기 위한 변수.
 static int32_t ratio;
+// 스크롤 동작일때는 스크롤버튼을 터치하고 있는동안 계속 스크롤 동작을 수행 함. 그러나 앞으로 가기/뒤로가기 동작일경우, 
+// 앞으로가기 또는 뒤로가기를 한번만 수행하고 나면 스크롤 버튼을 놓았다가 다시 터치할 때 까지는 deactivate 되어야 함.
 
 enum Skilled_mode_t {
     S_MODE_NONE = 0,
@@ -259,12 +260,14 @@ int skip_scroll_after_backforward_count = 0;
 int scroll_count = 0;
 
 #ifdef D_USE_LINACC
-/* linacc 적분 상태 */
+/* lin acc test */
 static float prev_laccx = 0, prev_laccz = 0;
 static float prev_velx = 0, prev_velz = 0;
 static float prev_dispx = 0, prev_dispz = 0;
-static float lin_acc_bias[3] = {0.0f, 0.0f, 0.0f}; // linacc 평균 바이어스
-#define LIN_ACC_N 10
+static float lin_acc_bias[3] = {0.f, 0.f, 0.f};
+static float lin_acc_sum[3] = {0.f, 0.f, 0.f};
+static int lin_acc_calibration_count = 0;
+#define LINACC_CALIB_SAMPLES 100
 #endif
 
 static uint8_t ub_cursor_mode_changed_count = 5;
@@ -308,9 +311,6 @@ static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
 static void mouse_movement_send(int16_t x_delta, int16_t y_delta);
 static void mouse_button_send(uint8_t button, uint8_t scroll, uint8_t sideways);
 static void Mouse_movement_handler(void *p_context);
-#ifdef D_USE_LINACC
-static void lin_acc_drift_fix(float laccx, float laccz);
-#endif
 void save_bias(int gbias0, int gbias2);
 
 magn_values_t magn_values;
@@ -569,7 +569,6 @@ void saadc_sampling_event_init(void)
 
     /* setup m_timer for compare event every 400ms */
     uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 400);
-    //uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 2000);
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -1254,7 +1253,6 @@ static void cursor_mode_timer_handler(void *p_context)
 }
 
 
-
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module.
@@ -1285,7 +1283,6 @@ static void timers_init(void)
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 cursor_mode_timer_handler);
     APP_ERROR_CHECK(err_code);
-
 }
 
 
@@ -1643,7 +1640,6 @@ static void timers_start(void)
 
     err_code = app_timer_start(m_switch_timer_id, APP_TIMER_TICKS(SWITCH_INTERVAL), NULL);
     APP_ERROR_CHECK(err_code);
-   
 }
 
 /**@brief Function for putting the chip into sleep mode.
@@ -1656,10 +1652,8 @@ static void sleep_mode_enter(void)
 
     nrf_gpio_pin_write(BSP_LED_0, 1);  // LED OFF
 
-    /* Ken 2026.01.03 : 의미 없는 코드라서 주석 처리 함.
-    err_code = bsp_indication_set(BSP_INDICATE_IDLE);  //  2026.01.02 Ken : 필요 없는 부분 아닌가? 검토 필요
+    err_code = bsp_indication_set(BSP_INDICATE_IDLE);
     APP_ERROR_CHECK(err_code);
-    */
 
     // Prepare wakeup buttons.
     err_code = bsp_btn_ble_sleep_mode_prepare();
@@ -1670,14 +1664,8 @@ static void sleep_mode_enter(void)
     nrf_gpio_cfg_sense_set(IMU_INT_PIN, NRF_GPIO_PIN_SENSE_LOW);
 #endif
 
-    NRF_LOG_FLUSH();
-    
-    NRF_LOG_INFO("Goto Sleep Mode. Bye for now ~~~");
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    //err_code = sd_power_system_off();
-    nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF);
-    //NRF_POWER->SYSTEMOFF = 1;  // 
-    
+    err_code = sd_power_system_off();
     APP_ERROR_CHECK(err_code);
 }
 
@@ -1794,7 +1782,6 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 #if DRIFT_FIX == 1
             save_bias(gyro_bias[0], gyro_bias[2]);
 #endif
-            NRF_LOG_INFO("Advertising over. Go to Sleep!");
             sleep_mode_enter();
             break;
 
@@ -2322,11 +2309,6 @@ static void bsp_event_handler(bsp_event_t event)
                 bool switch_mode = true;
                 b_move_pushed = true;
 
-#ifdef D_USE_LINACC
-                reset_prev_lacc(0);
-                reset_prev_lacc(1);
-#endif
-
                 for (int i=3; i>0; i--) {
                     t2_timestamps[i] = t2_timestamps[i-1];
                 }
@@ -2403,12 +2385,12 @@ static void bsp_event_handler(bsp_event_t event)
 
                 //below 7 variable are for scroll, backforward function
                 IMU_input_counts = 0;
-                accum_dx = 0;  // reset for back/forward decision
+                accum_dx = 0;
                 accum_dy = 0;
                 bRatio_calculate_once = true;                
                 bScrollActivated = false;
                 bScrollAction = false;
-                bBackforwardAction = false;    // clear back/forward flag
+                bBackforwardAction = false;
                 ratio = 0;                
 
                 if (skilled_mode) {
@@ -2435,73 +2417,11 @@ static void bsp_event_handler(bsp_event_t event)
 }
 
 
-#ifdef D_USE_LINACC
-static float lin_acc_average(const float *samples)
-{
-    float sum = 0.0f;
-
-    for (int i = 0; i < LIN_ACC_N; i++) {
-        sum += samples[i];
-    }
-    return sum / LIN_ACC_N;
-}
-
-static float lin_acc_variance(const float *samples, float avg)
-{
-    float sum = 0.0f;
-
-    for (int i = 0; i < LIN_ACC_N; i++) {
-        float diff = samples[i] - avg;
-        sum += diff * diff;
-    }
-    return sum / LIN_ACC_N;
-}
-
-#define LIN_ACC_VAR_THRESHOLD 0.01f
-#define LIN_ACC_AVG_LIMIT 0.2f
-#define LIN_ACC_RESET_COUNT 133
-
-static void lin_acc_drift_fix(float laccx, float laccz)
-{
-    static float lin_samples[2][LIN_ACC_N];
-    static int lin_count = 0;
-
-    if (lin_count < LIN_ACC_N) {
-        // linacc 샘플 수집
-        lin_samples[0][lin_count] = laccx;
-        lin_samples[1][lin_count] = laccz;
-    } else if (lin_count == LIN_ACC_N) {
-        // 평균/분산 계산
-        float avg_x = lin_acc_average(lin_samples[0]);
-        float avg_z = lin_acc_average(lin_samples[1]);
-        float var_x = lin_acc_variance(lin_samples[0], avg_x);
-        float var_z = lin_acc_variance(lin_samples[1], avg_z);
-
-        // 분산이 충분히 작으면 평균을 linacc 바이어스로 사용
-        if (var_x < LIN_ACC_VAR_THRESHOLD && var_z < LIN_ACC_VAR_THRESHOLD) {
-            if (fabsf(avg_x) < LIN_ACC_AVG_LIMIT && fabsf(avg_z) < LIN_ACC_AVG_LIMIT) {
-                lin_acc_bias[0] = avg_x;
-                lin_acc_bias[2] = avg_z;
-            }
-        }
-    }
-
-    if (lin_count < LIN_ACC_RESET_COUNT) {
-        lin_count++;
-    } else {
-        lin_count = 0;
-    }
-}
-#endif
-
-
 #if DRIFT_FIX == 1
 int16_t gy[3] = {0};  /* Gyroscope value without adjusting offset */
-int16_t acc[3] = {0};  /* Accelerometer value without adjusting offset */
 
 #define N       10
-static int input_array[3][N] = {0};
-static int acc_array[3][N] = {0};
+static int input_array[2][N] = {0};
 
 static int average(int i)
 {
@@ -2514,16 +2434,6 @@ static int average(int i)
     return sum / N;
 }
 
-static int acc_average(int i)
-{
-    int sum = 0;
-    
-    for (int k=0; k<N; k++)
-    {
-        sum += acc_array[i][k];
-    }
-    return sum / N;
-}
 
 static int variance(int avg, int i)
 {
@@ -2538,35 +2448,22 @@ static int variance(int avg, int i)
 }
 
 
-//drift_fix_1(gy[0], gy[2], gy[1], acc[0], acc[2], acc[1]);
-
-static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int16_t ac2, int16_t ac1)
+static void drift_fix_1(int16_t gy0, int16_t gy2)
 {
     static int num_input = 0;
-    static int avg0, avg2, avg1, var0, var2, var1, acc_avg0, acc_avg2, acc_avg1;
+    static int avg0, avg2, var0, var2;
 
     if (num_input < N) {
-        input_array[0][num_input] = gy0;  // gyro Y-axis
-        input_array[1][num_input] = gy2;  // gyro X-axis
-        input_array[2][num_input] = gy1;  // gyro Z-axis
-
-        acc_array[0][num_input] = ac0;
-        acc_array[1][num_input] = ac2;
-        acc_array[2][num_input] = ac1;
+        input_array[0][num_input] = gy0;
+        input_array[1][num_input] = gy2;
     } else if (num_input == N) {
 
         avg0 = average(0);
         avg2 = average(1);
-        avg1 = average(2);
         var0 = variance(avg0, 0);
         var2 = variance(avg2, 1);
-        var1 = variance(avg1, 2);
-        acc_avg0 = acc_average(0);
-        acc_avg2 = acc_average(1);
-        acc_avg1 = acc_average(2);
 
-        /* Legacy thresholds (original)
-        if (0 <= var0 && var0 < 6400) {
+ /*       if (0 <= var0 && var0 < 6400) {
             if (-8192 < avg0 && avg0 < 8192) {
                 gyro_bias[0] = avg0;
             }
@@ -2575,11 +2472,7 @@ static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int1
             if (-8192 < avg2 && avg2 < 8192) {
                 gyro_bias[2] = avg2;
             }
-        }
-        */
-
-
-        /* 교수님이 변경한 것.
+        }     */
         if (0 <= var0 && var0 < 3000) {
             if (-4000 < avg0 && avg0 < 4000) {
                 gyro_bias[0] = avg0;
@@ -2590,28 +2483,9 @@ static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int1
                 gyro_bias[2] = avg2;
             }
         } 
-        */
-
-        //2026.01.02 : Ken 변경. X/Y 모두 분산이 일정값 이하일 때 움직임이 없다고 판단하고 Bias 업데이트하도록 변경.
-        //NRF_LOG_INFO("[Ken Status] BiasX : %6d    BiasY : %6d   BiasZ : %6d    DevX : %6d    DevY : %6d    DevZ : %6d",(int)gyro_bias[2],(int)gyro_bias[0], (int)gyro_bias[1], var2, var0, var1); 
-        if ( (0 <= var0 && var0 < 3600) && (0 <= var2 && var2 < 3600)  ) {
-            if ( (-4000 < avg0 && avg0 < 4000) && (-4000 < avg2 && avg2 < 4000) && (-4000 < avg1 && avg1 < 4000)  ){
-                gyro_bias[0] = avg0;  // gyro Y-axis
-                gyro_bias[1] = avg1;  // gyro Z-axis
-                gyro_bias[2] = avg2;  // gyro X-axis
-
-                acc_bias[0] = acc_avg0;                
-                acc_bias[1] = acc_avg1;
-                acc_bias[2] = acc_avg2; 
-
-                NRF_LOG_RAW_INFO("[Ken: Bias Update] BiasX : %6d    BiasY : %6d       BiasZ : %6d      DevX : %6d    DevY : %6d    DevZ : %6d",(int)gyro_bias[2],(int)gyro_bias[0], (int)gyro_bias[1], var2, var0, var1); 
-                NRF_LOG_RAW_INFO("     AccBiasX : %6d      AccBiasY : %6d       AccBiasZ : %6d\n", acc_avg2, acc_avg0, acc_avg1); 
-            }
-        }
-        
     }
 
-    if (num_input < 133) {  /* 200 * 15ms = 3,000ms */
+    if (num_input < 200) {  /* 200 * 15ms = 3,000ms */
         num_input++;
     } else {
         num_input = 0;
@@ -2669,7 +2543,7 @@ bool load_bias(float *gbias0, float *gbias2)
 bool back_or_forward_action(int32_t accum_dx)
 {
   bool sent = false;
-  //NRF_LOG_INFO("back_or_forward_action accum_dx : %d", accum_dx);
+  NRF_LOG_INFO("back_or_forward_action accum_dx : %d", accum_dx);
 
   if (accum_dx > 20)
   {
@@ -2748,7 +2622,6 @@ static void Mouse_movement_handler(void *p_context)
 
 #ifdef D_USE_LINACC
     float tmp_laccx, tmp_laccz, velx, velz;
-    static uint32_t linacc_log_count = 0; // 로그 출력 주기 카운터
 #endif
     int16_t deltax = 0;
     int16_t deltay = 0;
@@ -2767,24 +2640,6 @@ static void Mouse_movement_handler(void *p_context)
     }
     old_time = now;
 
-
-    //2025.01.02 Ken : Gyro Bias값 업데이트를 BLE 연결하지 않은 상태에서도 진행하도록 수정.
-    // update accel gyro 
-    read_accel_gyro(raw_acc_gyro_data);
-
-#if DRIFT_FIX == 1
-        gy[0] = (float)raw_acc_gyro_data[3];  
-        gy[1] = (float)raw_acc_gyro_data[4];   
-        gy[2] = (float)raw_acc_gyro_data[5];   
-
-
-        acc[0] = (float)raw_acc_gyro_data[0];
-        acc[1] = (float)raw_acc_gyro_data[1];
-        acc[2] = (float)raw_acc_gyro_data[2];
-
-        drift_fix_1(gy[0], gy[2], gy[1], acc[0], acc[2], acc[1]);
-#endif
-
     if(m_connected == 1 && m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
         if (mouse_movement_skip300ms_counter < 20) {
@@ -2792,15 +2647,21 @@ static void Mouse_movement_handler(void *p_context)
             return;
         }
 
+        // update accel gyro 
+        read_accel_gyro(raw_acc_gyro_data);
 
 #ifdef D_USE_COMPFLT
-        // accel[0] = (float)raw_acc_gyro_data[0] - acc_bias[0];
-        // accel[1] = (float)raw_acc_gyro_data[1] - acc_bias[1];
-        // accel[2] = (float)raw_acc_gyro_data[2] - acc_bias[2];
-
+      
         gyro[0] = (float)raw_acc_gyro_data[3] - gyro_bias[0];
         gyro[1] = (float)raw_acc_gyro_data[4] - gyro_bias[1];
         gyro[2] = (float)raw_acc_gyro_data[5] - gyro_bias[2];
+
+#if DRIFT_FIX == 1
+        gy[0] = (float)raw_acc_gyro_data[3];
+        gy[2] = (float)raw_acc_gyro_data[5];
+
+        drift_fix_1(gy[0], gy[2]);
+#endif
 
         w_mz = gyro[2];
         w_mx = gyro[0];
@@ -2939,70 +2800,77 @@ static void Mouse_movement_handler(void *p_context)
 
         //lin_acc[0] = a[0] + a31;
         //lin_acc[1] = a[1] + a32;
-        lin_accel[0] = accel[0] + a32; // x축 기울기 보정
-        lin_accel[1] = accel[1] - a31; // y축(미사용, 보정값 계산 유지)
-        lin_accel[2] = accel[2] - a33; // z축 기울기 보정
+        lin_accel[0] = accel[0] + a32;
+        lin_accel[1] = accel[1] - a31;
+        lin_accel[2] = accel[2] - a33;
+#endif // D_USE_MADGWICK
+
 #ifdef D_USE_LINACC
-        // linacc 처리 흐름: 원본 -> 노이즈 컷 -> 바이어스 갱신 -> 보정
-        float raw_laccx = lin_accel[0];
-        float raw_laccz = lin_accel[2];
+        //캘리브레이션 부분(보정 샘플 수집)
+        if (lin_acc_calibration_count < LINACC_CALIB_SAMPLES) {
+            lin_acc_sum[0] += lin_accel[0]; // X축 가속도 합산
+            lin_acc_sum[1] += lin_accel[1]; 
+            lin_acc_sum[2] += lin_accel[2];
+            lin_acc_calibration_count++; // 샘플 수 증가
 
-        tmp_laccx = raw_laccx;
-        tmp_laccz = raw_laccz;
-
-        if (fabs(tmp_laccx) < 0.08f) {
-            // 미세 노이즈 제거
-            tmp_laccx = 0;
+            if (lin_acc_calibration_count == LINACC_CALIB_SAMPLES) { // 샘플 수가 목표치에 도달했을 때
+                lin_acc_bias[0] = lin_acc_sum[0] / (float)LINACC_CALIB_SAMPLES; // 평균 계산
+                lin_acc_bias[1] = lin_acc_sum[1] / (float)LINACC_CALIB_SAMPLES;
+                lin_acc_bias[2] = lin_acc_sum[2] / (float)LINACC_CALIB_SAMPLES;
+                NRF_LOG_INFO("[LIN_ACC_CALIB] Bias: X=%d, Y=%d, Z=%d (x1000)", //바이어스 출력
+                    (int)(lin_acc_bias[0] * 1000), // 1000 곱해서 정수로 변환
+                    (int)(lin_acc_bias[1] * 1000), 
+                    (int)(lin_acc_bias[2] * 1000));
+            }
+            return;
         }
 
-        if (fabs(tmp_laccz) < 0.08f) {
-            // 미세 노이즈 제거
-            tmp_laccz = 0;
+        {
+            float corrected_laccx = lin_accel[0] - lin_acc_bias[0];
+            float corrected_laccz = lin_accel[2] - lin_acc_bias[2];
+
+            if (fabs(corrected_laccx) < 0.03f) {
+                tmp_laccx = 0;
+            } else {
+                tmp_laccx = corrected_laccx;
+            }
+
+            if (fabs(corrected_laccz) < 0.03f) {
+                tmp_laccz = 0;
+            } else {
+                tmp_laccz = corrected_laccz;
+            }
         }
 
-        // linacc 평균/분산 기반 바이어스 갱신
-        lin_acc_drift_fix(tmp_laccx, tmp_laccz);
-        // 바이어스 보정
-        tmp_laccx -= lin_acc_bias[0];
-        tmp_laccz -= lin_acc_bias[2];
+        deltaT = 0.015f;
+#endif // D_USE_LINACC
 
-        if ((linacc_log_count++ % 200) == 0) {
-            int tx_e6 = (int)(raw_laccx * 1000000);
-            int tz_e6 = (int)(raw_laccz * 1000000);
-            int cx_e6 = (int)(tmp_laccx * 1000000);
-            int cz_e6 = (int)(tmp_laccz * 1000000);
-            NRF_LOG_INFO("linacc inst (x,z) e-6: %d %d", tx_e6, tz_e6);
-            NRF_LOG_INFO("linacc corr (x,z) e-6: %d %d", cx_e6, cz_e6);
-        }
-
-#endif  // D_USE_LINACC
-#endif  // D_USE_MADGWICK
         if (b_mouse_movement_flag || b_scroll_flag || b_mouse_movement_flag_2) 
         {
-#ifdef D_USE_LINACC // linacc 적분
+#ifdef D_USE_LINACC
+        //가속도 -> 속도 적분
+            velx = prev_velx + 0.5f*(tmp_laccx + prev_laccx)*deltaT;
+            velz = prev_velz + 0.5f*(tmp_laccz + prev_laccz)*deltaT;
 
-            // 바이어스 보정된 linacc 적분 → 속도 계산
-            velx = prev_velx + 0.5f * (tmp_laccx + prev_laccx) * deltaT;
-            velz = prev_velz + 0.5f * (tmp_laccz + prev_laccz) * deltaT;
-
-            prev_laccx = tmp_laccx;
+            prev_laccx = tmp_laccx;  // 이전 가속도 저장
             prev_laccz = tmp_laccz;
 
-            prev_velx = velx;
+            prev_velx = velx; // 이전 속도 저장
             prev_velz = velz;
 
-            deltax += -velx * 500;
-            deltay += velz * 500;
-            //deltax = -velx * 5000;
-            //deltay = velz * 5000;
-
             {
-                float accel_deltax = -velx * LINACC_SCALE_X;   // x축 방향 보정
-                float accel_deltay = velz * LINACC_SCALE_Y;    // z축 방향 보정
+                float accel_deltax = -velx * LINACC_SCALE_X;   // 음수 부호는 x축 방향 보정
+                float accel_deltay = velz * LINACC_SCALE_Y;    // 양수 부호는 z축 방향 보정
 
-                deltax = (int16_t)((float)deltax * GYRO_RATIO + accel_deltax * ACCEL_RATIO);
+                deltax = (int16_t)((float)deltax * GYRO_RATIO + accel_deltax * ACCEL_RATIO); // 자이로 + 가속도
                 deltay = (int16_t)((float)deltay * GYRO_RATIO + accel_deltay * ACCEL_RATIO);
             }
+
+            int la_e7 = (int)(tmp_laccz*10000000);
+            int v_e7 = (int)(velz*10000000);
+
+            NRF_LOG_INFO(", %5d, %5d", la_e7, v_e7);
+
 #endif  // D_USE_LINACC
 
             if (b_left_handed_flag) {
@@ -3027,7 +2895,7 @@ static void Mouse_movement_handler(void *p_context)
                   accum_dy += deltay;
                   double distance = sqrt((double)accum_dx * accum_dx + (double)accum_dy * accum_dy);
 
-                  //NRF_LOG_INFO("deltax : %d   accum_dx : %d     deltay: %d   accum_dy : %d      distance : %d ",deltax, accum_dx, deltay, accum_dy, distance);
+                  NRF_LOG_INFO("deltax : %d   accum_dx : %d     deltay: %d   accum_dy : %d      distance : %d ",deltax, accum_dx, deltay, accum_dy, distance);
                   if (distance > Criteria_Distance){
                     bScrollActivated = true;
                   }
@@ -3040,7 +2908,7 @@ static void Mouse_movement_handler(void *p_context)
                     if(accum_dx == 0)
                     {
                       bScrollAction = true;
-                      bBackforwardAction = false;    // clear back/forward flag
+                      bBackforwardAction = false;
                       bRatio_calculate_once = false;
                       ratio = 999999999;
                     }
@@ -3051,7 +2919,7 @@ static void Mouse_movement_handler(void *p_context)
                       if (ratio > Criteria_ScrollCheck_Positive || ratio < Criteria_ScrollCheck_Negative)
                       {
                         bScrollAction = true;
-                        bBackforwardAction = false;    // clear back/forward flag
+                        bBackforwardAction = false;
                         bRatio_calculate_once = false;
                       }
                       else
@@ -3067,13 +2935,13 @@ static void Mouse_movement_handler(void *p_context)
                   if(bScrollAction){  // 판단결과 스크롤 동작이라면...
                    if (skip_scroll_after_backforward_count-- <= 0 ) 
                    {
-                      //NRF_LOG_INFO("[Ken] Scroll Action     skip count : %d    ratio : %d", skip_scroll_after_backforward_count, ratio);                    
+                      NRF_LOG_INFO("[Ken] Scroll Action     skip count : %d    ratio : %d", skip_scroll_after_backforward_count, ratio);                    
                       scroll_action(filteredDeltaAngleScroll);                          
                     }
                   }
                   else if(bBackforwardAction)    // 판단결과 앞으로가기/뒤로가기라면...
                   {
-                    //NRF_LOG_INFO("[Ken] Back_Forward   RATIO : %d", ratio);
+                    NRF_LOG_INFO("[Ken] Back_Forward   RATIO : %d", ratio);
 
                     radian_2 = filteredDeltaAngle2 * DEG_TO_RAD;
                     tan_2 = tan(radian_2);
@@ -3091,12 +2959,6 @@ static void Mouse_movement_handler(void *p_context)
             }
 
             else {
-                
-              // 커서 흐름 현상을 검토하기 위한 Gyro Raw Data 출력. Move 버튼 누르면 출력 됨.
-              //NRF_LOG_INFO("[Ken] rawX : %6d   rawY : %6d   rawZ : %6d    calX : %6d    calY : %6d   calZ : %6d     deltaX : %4d     deltaY : %4d", raw_acc_gyro_data[5], raw_acc_gyro_data[3],raw_acc_gyro_data[4], (int)gyro[2],(int)gyro[0],(int)gyro[1], deltax, deltay);
-              NRF_LOG_RAW_INFO("[Ken] rawX : %6d    rawY : %6d    rawZ : %6d  |  calX : %6d    calY : %6d   calZ : %6d   |", raw_acc_gyro_data[5], raw_acc_gyro_data[3],raw_acc_gyro_data[4], (int)gyro[2],(int)gyro[0],(int)gyro[1]);
-              NRF_LOG_RAW_INFO("  deltaX : %4d     deltaY : %4d \n", deltax, deltay);
-         
                 dx[c_index] = deltax;
                 dy[c_index] = deltay;
                 c_index++;
@@ -3164,7 +3026,7 @@ static void Mouse_movement_handler(void *p_context)
             save_bias(gyro_bias[0], gyro_bias[2]);
 #endif
 
-            NRF_LOG_INFO("%d, Timeout Sleep!",base_ticks);
+            NRF_LOG_INFO("%d, Timeout Sleep... Bye~~~",base_ticks);
             sleep_mode_enter();
         }
     }
@@ -3267,7 +3129,8 @@ int main(void)
     if ((tmp & POWER_RESETREAS_SREQ_Msk) || (tmp == 0)) {
         verbose = true;
     }
-    setupIMU(true);
+    setupIMU(verbose);
+
 #if DRIFT_FIX == 1
     {
         float offset0, offset2;
