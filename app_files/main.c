@@ -1,4 +1,4 @@
-
+﻿
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -189,23 +189,26 @@
 //#define NORMAL_SCALE_Y                  ((RAD_TO_DEG)*(40))
 /* End of scaling */
 
+#define GYRO_RATIO 0.7f
+#define ACCEL_RATIO 0.3f
+#define LINACC_SCALE_X 120.0f // 속도 -> 커서 이동 스케일
+#define LINACC_SCALE_Y 120.0f
+
 #define TILT_ANGLE                      ((HORIZANTAL_TILT+VERTICAL_TILT)/(2.0))
 
-/* 앞으로 가기/뒤로가기 기능을 위한 변수들 */
-#define Criteria_Distance   10     //스크롤과 앞/뒤 동작을 판단하기 위한 최소 이동거리 
-#define Criteria_ScrollCheck_Positive  80  // 스크롤과 앞으로가기/뒤로가기를 구분하기 위한 + 기울기 값 (accum_y * 100 / accum_x 값)
-#define Criteria_ScrollCheck_Negative  -80  // 스크롤과 앞으로가기/뒤로가기를 구분하기 위한 - 기울기 값 (accum_y * 100 / accum_x 값)
-#define NumberofAbandonInputs   5  //초기 입력 중 진동으로 인하여 무시 할 입력 갯수.
-static int32_t accum_dx = 0;          // 자이로의 deltax를 누적한 값. 기울기 값 및 이동거리 계산에 사용.
-static int32_t accum_dy = 0;          // 자이로의 deltay를 누적한 값. 기울기 값 및 이동거리 계산에 사용.
-static int32_t IMU_input_counts = 0;      // 스크롤 버튼 터치 후 초기 5개? 값을 버릴 때 사용하기 위한 변수. 버튼 터치 시 진동에 의한 입력을 무시 하기 위한 동작임. 
-static bool bRatio_calculate_once = true;  // ratio 계산으로 조건 만족하면 한번만 하면 됨. 한번만 계산할 때 사용하기 위한 변수.
-static bool bScrollActivated = false;      //스크롤 버튼 터치 후 일정거리 이상 움직이면 ratio 에 따라 스크롤일지 앞/뒤일지 한번만 결정 함. 이 때 사용하기 위한 변수
-static bool bScrollAction = false;     //위 ratio 계산결과 스크롤일경우, 스크롤 동작을 수행하기 위한 변수.
-static bool bBackforwardAction = false;  //위 ratio 계산결과 앞으로가기/뒤로가기일경우, 앞으로가기/뒤로가기 동작을 수행하기 위한 변수.
+// 스크롤/뒤로가기 판정 기준
+#define Criteria_Distance   10     // 스크롤/뒤로가기 판정 시작 최소 이동거리
+#define Criteria_ScrollCheck_Positive  80   // ratio 기준(+) : (accum_dy * 100 / accum_dx)
+#define Criteria_ScrollCheck_Negative  -80  // ratio 기준(-) : (accum_dy * 100 / accum_dx)
+#define NumberofAbandonInputs   5           // 초기 IMU 입력 무시 횟수
+static int32_t accum_dx = 0;                // 누적 deltax (스크롤/뒤로가기 판정용)
+static int32_t accum_dy = 0;                // 누적 deltay (스크롤/뒤로가기 판정용)
+static int32_t IMU_input_counts = 0;        // 초기 IMU 입력 무시 카운트
+static bool bRatio_calculate_once = true;   // ratio는 한 번만 계산
+static bool bScrollActivated = false;       // 최소 이동거리 만족 후 판정 활성화
+static bool bScrollAction = false;          // ratio 결과가 스크롤이면 true
+static bool bBackforwardAction = false;
 static int32_t ratio;
-// 스크롤 동작일때는 스크롤버튼을 터치하고 있는동안 계속 스크롤 동작을 수행 함. 그러나 앞으로 가기/뒤로가기 동작일경우, 
-// 앞으로가기 또는 뒤로가기를 한번만 수행하고 나면 스크롤 버튼을 놓았다고 다시 터치할 때 까지는 deactivate 되어야 함.
 
 enum Skilled_mode_t {
     S_MODE_NONE = 0,
@@ -256,10 +259,12 @@ int skip_scroll_after_backforward_count = 0;
 int scroll_count = 0;
 
 #ifdef D_USE_LINACC
-/* lin acc test */
+/* linacc 적분 상태 */
 static float prev_laccx = 0, prev_laccz = 0;
 static float prev_velx = 0, prev_velz = 0;
 static float prev_dispx = 0, prev_dispz = 0;
+static float lin_acc_bias[3] = {0.0f, 0.0f, 0.0f}; // linacc 평균 바이어스
+#define LIN_ACC_N 10
 #endif
 
 static uint8_t ub_cursor_mode_changed_count = 5;
@@ -303,6 +308,9 @@ static void on_hids_evt(ble_hids_t * p_hids, ble_hids_evt_t * p_evt);
 static void mouse_movement_send(int16_t x_delta, int16_t y_delta);
 static void mouse_button_send(uint8_t button, uint8_t scroll, uint8_t sideways);
 static void Mouse_movement_handler(void *p_context);
+#ifdef D_USE_LINACC
+static void lin_acc_drift_fix(float laccx, float laccz);
+#endif
 void save_bias(int gbias0, int gbias2);
 
 magn_values_t magn_values;
@@ -2314,6 +2322,11 @@ static void bsp_event_handler(bsp_event_t event)
                 bool switch_mode = true;
                 b_move_pushed = true;
 
+#ifdef D_USE_LINACC
+                reset_prev_lacc(0);
+                reset_prev_lacc(1);
+#endif
+
                 for (int i=3; i>0; i--) {
                     t2_timestamps[i] = t2_timestamps[i-1];
                 }
@@ -2390,12 +2403,12 @@ static void bsp_event_handler(bsp_event_t event)
 
                 //below 7 variable are for scroll, backforward function
                 IMU_input_counts = 0;
-                accum_dx = 0;
+                accum_dx = 0;  // reset for back/forward decision
                 accum_dy = 0;
                 bRatio_calculate_once = true;                
                 bScrollActivated = false;
                 bScrollAction = false;
-                bBackforwardAction = false;
+                bBackforwardAction = false;    // clear back/forward flag
                 ratio = 0;                
 
                 if (skilled_mode) {
@@ -2420,6 +2433,66 @@ static void bsp_event_handler(bsp_event_t event)
     }
 
 }
+
+
+#ifdef D_USE_LINACC
+static float lin_acc_average(const float *samples)
+{
+    float sum = 0.0f;
+
+    for (int i = 0; i < LIN_ACC_N; i++) {
+        sum += samples[i];
+    }
+    return sum / LIN_ACC_N;
+}
+
+static float lin_acc_variance(const float *samples, float avg)
+{
+    float sum = 0.0f;
+
+    for (int i = 0; i < LIN_ACC_N; i++) {
+        float diff = samples[i] - avg;
+        sum += diff * diff;
+    }
+    return sum / LIN_ACC_N;
+}
+
+#define LIN_ACC_VAR_THRESHOLD 0.01f
+#define LIN_ACC_AVG_LIMIT 0.2f
+#define LIN_ACC_RESET_COUNT 133
+
+static void lin_acc_drift_fix(float laccx, float laccz)
+{
+    static float lin_samples[2][LIN_ACC_N];
+    static int lin_count = 0;
+
+    if (lin_count < LIN_ACC_N) {
+        // linacc 샘플 수집
+        lin_samples[0][lin_count] = laccx;
+        lin_samples[1][lin_count] = laccz;
+    } else if (lin_count == LIN_ACC_N) {
+        // 평균/분산 계산
+        float avg_x = lin_acc_average(lin_samples[0]);
+        float avg_z = lin_acc_average(lin_samples[1]);
+        float var_x = lin_acc_variance(lin_samples[0], avg_x);
+        float var_z = lin_acc_variance(lin_samples[1], avg_z);
+
+        // 분산이 충분히 작으면 평균을 linacc 바이어스로 사용
+        if (var_x < LIN_ACC_VAR_THRESHOLD && var_z < LIN_ACC_VAR_THRESHOLD) {
+            if (fabsf(avg_x) < LIN_ACC_AVG_LIMIT && fabsf(avg_z) < LIN_ACC_AVG_LIMIT) {
+                lin_acc_bias[0] = avg_x;
+                lin_acc_bias[2] = avg_z;
+            }
+        }
+    }
+
+    if (lin_count < LIN_ACC_RESET_COUNT) {
+        lin_count++;
+    } else {
+        lin_count = 0;
+    }
+}
+#endif
 
 
 #if DRIFT_FIX == 1
@@ -2473,9 +2546,9 @@ static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int1
     static int avg0, avg2, avg1, var0, var2, var1, acc_avg0, acc_avg2, acc_avg1;
 
     if (num_input < N) {
-        input_array[0][num_input] = gy0;  // 화면 Y-좌표 
-        input_array[1][num_input] = gy2;  // 화면 X-좌표
-        input_array[2][num_input] = gy1;  // 화면 Z-좌표(미사용)
+        input_array[0][num_input] = gy0;  // gyro Y-axis
+        input_array[1][num_input] = gy2;  // gyro X-axis
+        input_array[2][num_input] = gy1;  // gyro Z-axis
 
         acc_array[0][num_input] = ac0;
         acc_array[1][num_input] = ac2;
@@ -2492,7 +2565,7 @@ static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int1
         acc_avg2 = acc_average(1);
         acc_avg1 = acc_average(2);
 
-        /* 설이사님 원본
+        /* Legacy thresholds (original)
         if (0 <= var0 && var0 < 6400) {
             if (-8192 < avg0 && avg0 < 8192) {
                 gyro_bias[0] = avg0;
@@ -2523,9 +2596,9 @@ static void drift_fix_1(int16_t gy0, int16_t gy2, int16_t gy1, int16_t ac0, int1
         //NRF_LOG_INFO("[Ken Status] BiasX : %6d    BiasY : %6d   BiasZ : %6d    DevX : %6d    DevY : %6d    DevZ : %6d",(int)gyro_bias[2],(int)gyro_bias[0], (int)gyro_bias[1], var2, var0, var1); 
         if ( (0 <= var0 && var0 < 3600) && (0 <= var2 && var2 < 3600)  ) {
             if ( (-4000 < avg0 && avg0 < 4000) && (-4000 < avg2 && avg2 < 4000) && (-4000 < avg1 && avg1 < 4000)  ){
-                gyro_bias[0] = avg0;  // 화면 Y-좌표
-                gyro_bias[1] = avg1;  // Z-좌표
-                gyro_bias[2] = avg2;  // 화면 X-좌표                
+                gyro_bias[0] = avg0;  // gyro Y-axis
+                gyro_bias[1] = avg1;  // gyro Z-axis
+                gyro_bias[2] = avg2;  // gyro X-axis
 
                 acc_bias[0] = acc_avg0;                
                 acc_bias[1] = acc_avg1;
@@ -2675,6 +2748,7 @@ static void Mouse_movement_handler(void *p_context)
 
 #ifdef D_USE_LINACC
     float tmp_laccx, tmp_laccz, velx, velz;
+    static uint32_t linacc_log_count = 0; // 로그 출력 주기 카운터
 #endif
     int16_t deltax = 0;
     int16_t deltay = 0;
@@ -2699,9 +2773,10 @@ static void Mouse_movement_handler(void *p_context)
     read_accel_gyro(raw_acc_gyro_data);
 
 #if DRIFT_FIX == 1
-        gy[0] = (float)raw_acc_gyro_data[3];   // Y-axis
-        gy[2] = (float)raw_acc_gyro_data[5];   // X-axis
-        gy[1] = (float)raw_acc_gyro_data[4];   // Z-axis
+        gy[0] = (float)raw_acc_gyro_data[3];  
+        gy[1] = (float)raw_acc_gyro_data[4];   
+        gy[2] = (float)raw_acc_gyro_data[5];   
+
 
         acc[0] = (float)raw_acc_gyro_data[0];
         acc[1] = (float)raw_acc_gyro_data[1];
@@ -2719,9 +2794,9 @@ static void Mouse_movement_handler(void *p_context)
 
 
 #ifdef D_USE_COMPFLT
-        accel[0] = (float)raw_acc_gyro_data[0] - acc_bias[0];
-        accel[1] = (float)raw_acc_gyro_data[1] - acc_bias[1];
-        accel[2] = (float)raw_acc_gyro_data[2] - acc_bias[2];
+        // accel[0] = (float)raw_acc_gyro_data[0] - acc_bias[0];
+        // accel[1] = (float)raw_acc_gyro_data[1] - acc_bias[1];
+        // accel[2] = (float)raw_acc_gyro_data[2] - acc_bias[2];
 
         gyro[0] = (float)raw_acc_gyro_data[3] - gyro_bias[0];
         gyro[1] = (float)raw_acc_gyro_data[4] - gyro_bias[1];
@@ -2864,32 +2939,51 @@ static void Mouse_movement_handler(void *p_context)
 
         //lin_acc[0] = a[0] + a31;
         //lin_acc[1] = a[1] + a32;
-        lin_accel[0] = accel[0] + a32;
-        lin_accel[1] = accel[1] - a31;
-        lin_accel[2] = accel[2] - a33;
-#endif // D_USE_MADGWICK
-
+        lin_accel[0] = accel[0] + a32; // x축 기울기 보정
+        lin_accel[1] = accel[1] - a31; // y축(미사용, 보정값 계산 유지)
+        lin_accel[2] = accel[2] - a33; // z축 기울기 보정
 #ifdef D_USE_LINACC
-        if (fabs(lin_accel[0]) < 0.03f) {
+        // linacc 처리 흐름: 원본 -> 노이즈 컷 -> 바이어스 갱신 -> 보정
+        float raw_laccx = lin_accel[0];
+        float raw_laccz = lin_accel[2];
+
+        tmp_laccx = raw_laccx;
+        tmp_laccz = raw_laccz;
+
+        if (fabs(tmp_laccx) < 0.08f) {
+            // 미세 노이즈 제거
             tmp_laccx = 0;
-        } else {
-            tmp_laccx = lin_accel[0];
         }
 
-        if (fabs(lin_accel[2]) < 0.03f) {
+        if (fabs(tmp_laccz) < 0.08f) {
+            // 미세 노이즈 제거
             tmp_laccz = 0;
-        } else {
-            tmp_laccz = lin_accel[2];
         }
 
-        deltaT = 0.015f;
-#endif // D_USE_LINACC
+        // linacc 평균/분산 기반 바이어스 갱신
+        lin_acc_drift_fix(tmp_laccx, tmp_laccz);
+        // 바이어스 보정
+        tmp_laccx -= lin_acc_bias[0];
+        tmp_laccz -= lin_acc_bias[2];
 
+        if ((linacc_log_count++ % 200) == 0) {
+            int tx_e6 = (int)(raw_laccx * 1000000);
+            int tz_e6 = (int)(raw_laccz * 1000000);
+            int cx_e6 = (int)(tmp_laccx * 1000000);
+            int cz_e6 = (int)(tmp_laccz * 1000000);
+            NRF_LOG_INFO("linacc inst (x,z) e-6: %d %d", tx_e6, tz_e6);
+            NRF_LOG_INFO("linacc corr (x,z) e-6: %d %d", cx_e6, cz_e6);
+        }
+
+#endif  // D_USE_LINACC
+#endif  // D_USE_MADGWICK
         if (b_mouse_movement_flag || b_scroll_flag || b_mouse_movement_flag_2) 
         {
-#ifdef D_USE_LINACC
-            velx = prev_velx + 0.5f*(tmp_laccx + prev_laccx)*deltaT;
-            velz = prev_velz + 0.5f*(tmp_laccz + prev_laccz)*deltaT;
+#ifdef D_USE_LINACC // linacc 적분
+
+            // 바이어스 보정된 linacc 적분 → 속도 계산
+            velx = prev_velx + 0.5f * (tmp_laccx + prev_laccx) * deltaT;
+            velz = prev_velz + 0.5f * (tmp_laccz + prev_laccz) * deltaT;
 
             prev_laccx = tmp_laccx;
             prev_laccz = tmp_laccz;
@@ -2897,16 +2991,18 @@ static void Mouse_movement_handler(void *p_context)
             prev_velx = velx;
             prev_velz = velz;
 
-            deltax += -velx*500;
-            deltay += velz*500;
-            //deltax = -velx*5000;
-            //deltay = velz*5000;
+            deltax += -velx * 500;
+            deltay += velz * 500;
+            //deltax = -velx * 5000;
+            //deltay = velz * 5000;
 
-            int la_e7 = (int)(tmp_laccz*10000000);
-            int v_e7 = (int)(velz*10000000);
+            {
+                float accel_deltax = -velx * LINACC_SCALE_X;   // x축 방향 보정
+                float accel_deltay = velz * LINACC_SCALE_Y;    // z축 방향 보정
 
-            NRF_LOG_INFO(", %5d, %5d", la_e7, v_e7);
-
+                deltax = (int16_t)((float)deltax * GYRO_RATIO + accel_deltax * ACCEL_RATIO);
+                deltay = (int16_t)((float)deltay * GYRO_RATIO + accel_deltay * ACCEL_RATIO);
+            }
 #endif  // D_USE_LINACC
 
             if (b_left_handed_flag) {
@@ -2944,7 +3040,7 @@ static void Mouse_movement_handler(void *p_context)
                     if(accum_dx == 0)
                     {
                       bScrollAction = true;
-                      bBackforwardAction = false;
+                      bBackforwardAction = false;    // clear back/forward flag
                       bRatio_calculate_once = false;
                       ratio = 999999999;
                     }
@@ -2955,7 +3051,7 @@ static void Mouse_movement_handler(void *p_context)
                       if (ratio > Criteria_ScrollCheck_Positive || ratio < Criteria_ScrollCheck_Negative)
                       {
                         bScrollAction = true;
-                        bBackforwardAction = false;
+                        bBackforwardAction = false;    // clear back/forward flag
                         bRatio_calculate_once = false;
                       }
                       else
@@ -3172,7 +3268,6 @@ int main(void)
         verbose = true;
     }
     setupIMU(true);
-
 #if DRIFT_FIX == 1
     {
         float offset0, offset2;

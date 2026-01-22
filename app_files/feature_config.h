@@ -10,8 +10,8 @@
 #define	D_BATTERY_LEVEL_CONTROL		// Display battery level on bluetooth device of windows
 #define	D_NEW_BATTERY_LEVEL_CALC
 #define	D_DCDC_ENABLE
-//#define D_USE_MADGWICK
-//#define D_USE_LINACC
+#define D_USE_MADGWICK
+#define D_USE_LINACC
 #define D_USE_COMPFLT
 #define WOM_ENABLED
 //#define POLL_125HZ    //use this to change Mouse Polling rate 66Hz --> 125Hz
